@@ -290,8 +290,28 @@ def create_hmmlearn_data(dict):
         seq_len_dict[key] = np.array(sequence_cat), sequence_lengths
     return seq_len_dict
 
+def custom(asl):
+    asl.df['grnd-ry'] = asl.df['right-y'] - asl.df['nose-y']
+    asl.df['grnd-rx'] = asl.df['right-x'] - asl.df['nose-x']
+    asl.df['grnd-ly'] = asl.df['left-y'] - asl.df['nose-y']
+    asl.df['grnd-lx'] = asl.df['left-x'] - asl.df['nose-x']
+    features_ground = ['grnd-rx', 'grnd-ry', 'grnd-lx', 'grnd-ly']
+    training = asl.build_training(features_ground)
+    print("Training words: {}".format(training.words))
+
+    for v in video_set:
+        # for each video
+        asl.df.loc[v, 'delta-rx'] = np.array(asl.df.loc[v]['right-x'].diff())
+        asl.df.loc[v, 'delta-ry'] = np.array(asl.df.loc[v]['right-y'].diff())
+        asl.df.loc[v, 'delta-lx'] = np.array(asl.df.loc[v]['left-x'].diff())
+        asl.df.loc[v, 'delta-ly'] = np.array(asl.df.loc[v]['left-y'].diff())
+
+    asl.df[features_delta] = asl.df[features_delta].fillna(0).astype(int)
+
+
 if __name__ == '__main__':
     asl= AslDb()
+    custom(asl)
     print(asl.df.ix[98, 1])
 
 
