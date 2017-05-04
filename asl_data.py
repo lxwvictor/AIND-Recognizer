@@ -298,7 +298,42 @@ def custom(asl):
     features_ground = ['grnd-rx', 'grnd-ry', 'grnd-lx', 'grnd-ly']
     training = asl.build_training(features_ground)
     print("Training words: {}".format(training.words))
+    print(training.get_word_Xlengths('CHOCOLATE'))
 
+    df_means = asl.df.groupby('speaker').mean()
+    asl.df['left-x-mean'] = asl.df['speaker'].map(df_means['left-x'])
+
+
+    # left-x-mean exists, add the rest
+    asl.df['left-y-mean'] = asl.df['speaker'].map(df_means['left-y'])
+    asl.df['right-x-mean'] = asl.df['speaker'].map(df_means['right-x'])
+    asl.df['right-y-mean'] = asl.df['speaker'].map(df_means['right-y'])
+
+    df_std = asl.df.groupby('speaker').std()
+    # Use the same way to create std for each tuple
+    asl.df['left-x-std'] = asl.df['speaker'].map(df_std['left-x'])
+    asl.df['left-y-std'] = asl.df['speaker'].map(df_std['left-y'])
+    asl.df['right-x-std'] = asl.df['speaker'].map(df_std['right-x'])
+    asl.df['right-y-std'] = asl.df['speaker'].map(df_std['right-y'])
+
+    features_norm = ['norm-rx', 'norm-ry', 'norm-lx', 'norm-ly']
+
+    # Create the norms
+    asl.df['norm-lx'] = (asl.df['left-x'] - asl.df['left-x-mean']) / asl.df['left-x-std']
+    asl.df['norm-ly'] = (asl.df['left-y'] - asl.df['left-y-mean']) / asl.df['left-y-std']
+    asl.df['norm-rx'] = (asl.df['right-x'] - asl.df['right-x-mean']) / asl.df['right-x-std']
+    asl.df['norm-ry'] = (asl.df['right-y'] - asl.df['right-y-mean']) / asl.df['right-y-std']
+
+    features_polar = ['polar-rr', 'polar-rtheta', 'polar-lr', 'polar-ltheta']
+
+    asl.df['polar-lr'] = np.sqrt(asl.df['grnd-lx'] ** 2 + asl.df['grnd-ly'] ** 2)
+    asl.df['polar-ltheta'] = np.arctan2(asl.df['grnd-lx'], asl.df['grnd-ly'])
+
+    asl.df['polar-rr'] = np.sqrt(asl.df['grnd-rx'] ** 2 + asl.df['grnd-ry'] ** 2)
+    asl.df['polar-rtheta'] = np.arctan2(asl.df['grnd-rx'], asl.df['grnd-ry'])
+
+    features_delta = ['delta-rx', 'delta-ry', 'delta-lx', 'delta-ly']
+    video_set = set(asl.df.index.get_level_values('video'))
     for v in video_set:
         # for each video
         asl.df.loc[v, 'delta-rx'] = np.array(asl.df.loc[v]['right-x'].diff())
@@ -308,10 +343,56 @@ def custom(asl):
 
     asl.df[features_delta] = asl.df[features_delta].fillna(0).astype(int)
 
+    import warnings
+    from hmmlearn.hmm import GaussianHMM
+
+    def train_a_word(word, num_hidden_states, features):
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        training = asl.build_training(features)
+        X, lengths = training.get_word_Xlengths(word)
+        model = GaussianHMM(n_components=num_hidden_states, n_iter=1000).fit(X, lengths)
+        logL = model.score(X, lengths)
+        return model, logL
+
+    def show_model_stats(word, model):
+        print("Number of states trained in model for {} is {}".format(word, model.n_components))
+        variance = np.array([np.diag(model.covars_[i]) for i in range(model.n_components)])
+        for i in range(model.n_components):  # for each hidden state
+            print("hidden state #{}".format(i))
+            print("mean = ", model.means_[i])
+            print("variance = ", variance[i])
+            print()
+
+    my_testword = 'CHOCOLATE'
+    #model, logL = train_a_word(my_testword, 3, features_norm)  # Experiment here with different parameters
+    #print("Number of states trained in model for {} is {}".format(my_testword, model.n_components))
+    #print("logL = {}".format(logL))
+    #show_model_stats(my_testword, model)
+
+    words_to_train = ['FISH', 'BOOK', 'VEGETABLE', 'FUTURE', 'JOHN']
+    import timeit
+
+    from my_model_selectors import SelectorBIC
+    from my_model_selectors import SelectorDIC
+    from my_model_selectors import SelectorCV
+
+    training = asl.build_training(features_norm)  # Experiment here with different feature sets defined in part 1
+    sequences = training.get_all_sequences()
+    Xlengths = training.get_all_Xlengths()
+    for word in words_to_train:
+        start = timeit.default_timer()
+        model = SelectorCV(sequences, Xlengths, word,
+                            min_n_components=2, max_n_components=15, random_state=14).select()
+        end = timeit.default_timer() - start
+        if model is not None:
+            print("Training complete for {} with {} states with time {} seconds".format(word, model.n_components, end))
+        else:
+            print("Training failed for {}".format(word))
+
 
 if __name__ == '__main__':
     asl= AslDb()
     custom(asl)
-    print(asl.df.ix[98, 1])
+    #print(asl.df.ix[98, 1])
 
 

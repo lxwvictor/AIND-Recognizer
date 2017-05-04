@@ -77,6 +77,30 @@ class SelectorBIC(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection based on BIC scores
+        try:
+            # Initialize BIC to positive inf, as we need to find the lowest BIC.
+            bestBIC = curBIC = float("inf")
+            for n_components in range(self.min_n_components, self.max_n_components+1):
+                hmm_model = GaussianHMM(n_components, covariance_type="diag", n_iter=1000,
+                                        random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+                try:
+                    logL = hmm_model.score(self.X, self.lengths)
+                    #print("word {}, n {}, logL {}".format(self.this_word, n_components, logL))
+                    p = len(self.X)
+                    curBIC = -2 * logL + p * math.log(n_components)
+                    if curBIC < bestBIC:
+                        bestBIC = curBIC
+                        bestModel = hmm_model
+                except:
+                    continue
+            if self.verbose:
+                print("model created for {} with {} states".format(self.this_word, num_states))
+            return bestModel
+        except:
+            if self.verbose:
+                print("failure on {} with {} states".format(self.this_word, num_states))
+            return None
+
         raise NotImplementedError
 
 
@@ -93,6 +117,40 @@ class SelectorDIC(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection based on DIC scores
+        try:
+            # Initialize DIC to nagative inf, as we need to find the biggest DIC.
+            bestDIC = curDIC = -float("inf")
+            M = len(self.hwords)
+            sumOthers = 0
+            for n_components in range(self.min_n_components, self.max_n_components+1):
+                hmm_model = GaussianHMM(n_components, covariance_type="diag", n_iter=1000,
+                                        random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
+                try:
+                    logL = hmm_model.score(self.X, self.lengths)
+                    #print("word {}, n {}, logL {}".format(self.this_word, n_components, logL))
+
+                    for word in self.hwords:
+                        if self.this_word == word:
+                            continue
+                        X, lengths = self.hwords[word]
+                        otherLogL = hmm_model.score(X, lengths)
+                        sumOthers += otherLogL
+
+                    #print("sum other work {}".format(sumOthers))
+                    curDIC = logL - sumOthers/(M-1)
+                    if curDIC > bestDIC:
+                        bestDIC = curDIC
+                        bestModel = hmm_model
+                except:
+                    continue
+            if self.verbose:
+                print("model created for {} with {} states".format(self.this_word, num_states))
+            return bestModel
+        except:
+            if self.verbose:
+                print("failure on {} with {} states".format(self.this_word, num_states))
+            return None
+
         raise NotImplementedError
 
 
@@ -105,4 +163,44 @@ class SelectorCV(ModelSelector):
         warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # TODO implement model selection using CV
+        from sklearn.model_selection import KFold
+
+        try:
+            # Initialize CV to negative inf, as we need to find the biggest CV.
+            bestCV = curCV = -float("inf")
+            for n_components in range(self.min_n_components, self.max_n_components+1):
+                foldCount = foldLogSum = 0
+
+                # n_splits of KFold is default 3, at least 2
+                if len(self.sequences) < 3:
+                    split_method = KFold(n_splits=2)
+                else:
+                    split_method = KFold()
+                for cv_train_index, cv_test_index in split_method.split(self.sequences):
+                    trainX, train_lengths = combine_sequences(cv_train_index, self.sequences)
+                    testX, test_lengths = combine_sequences(cv_test_index, self.sequences)
+                    hmm_model = GaussianHMM(n_components, covariance_type="diag", n_iter=1000,
+                                            random_state=self.random_state, verbose=False).fit(trainX, train_lengths)
+                    try:
+                        testLogL = hmm_model.score(testX, test_lengths)
+                        foldCount += 1
+                        foldLogSum += testLogL
+                    #print("word {}, n {}, logL {}".format(self.this_word, n_components, testLogL))
+                    except:
+                        continue
+
+                CVLogL = foldLogSum/foldCount
+                curCV = CVLogL
+                #rint("average CV {}".format(curCV))
+                if curCV > bestCV:
+                    bestCV = curCV
+                    bestModel = hmm_model
+
+            if self.verbose:
+                print("model created for {} with {} states".format(self.this_word, num_states))
+            return bestModel
+        except:
+            if self.verbose:
+                print("failure on {} with {} states".format(self.this_word, num_states))
+            return None
         raise NotImplementedError
