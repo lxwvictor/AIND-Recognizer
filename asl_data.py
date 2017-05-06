@@ -425,6 +425,7 @@ def customRec(asl):
 
     features_list = [features_ground, features_norm, features_polar, features_delta, features_custom]
     model_selector_list = [SelectorConstant, SelectorBIC, SelectorDIC, SelectorCV]
+    #model_selector_list = [SelectorBIC]
     for features in features_list:
         for model_selector in model_selector_list:
             print("\n",features, model_selector.__name__)

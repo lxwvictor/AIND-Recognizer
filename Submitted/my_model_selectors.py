@@ -7,6 +7,9 @@ from hmmlearn.hmm import GaussianHMM
 from sklearn.model_selection import KFold
 from asl_utils import combine_sequences
 
+import logging
+logging.basicConfig(level=logging.INFO)
+logging.info("Started my_model_selectors.py")
 
 class ModelSelector(object):
     '''
@@ -84,11 +87,19 @@ class SelectorBIC(ModelSelector):
                 try:
                     hmm_model = GaussianHMM(n_components, covariance_type="diag", n_iter=1000,
                                         random_state=self.random_state, verbose=False).fit(self.X, self.lengths)
-
                     logL = hmm_model.score(self.X, self.lengths)
                     #print("word {}, n {}, logL {}".format(self.this_word, n_components, logL))
-                    p = len(self.X)
-                    curBIC = -2 * logL + p * math.log(n_components)
+
+                    # N is the number of data points
+                    N = len(self.X)
+                    # p is the number of parameters, let m=n_components, f=num_features
+                    # size of transmat matrix less one row, m*(m-1), plus
+                    # free starting probabilities, m-1, plus
+                    # number of means, m*f, plus
+                    # number of covariances, m*f
+                    # equals, m^2 + 2*m*f - 1
+                    p = n_components ** 2 + 2*n_components*hmm_model.n_features - 1
+                    curBIC = -2 * logL + p * math.log(N)
                     if curBIC < bestBIC:
                         bestBIC = curBIC
                         bestModel = hmm_model
@@ -191,7 +202,7 @@ class SelectorCV(ModelSelector):
                         #print("word {}, n {}, logL {}".format(self.this_word, n_components, testLogL))
                     except:
                         continue
-                if foldCount != 0:
+                if foldCount != 0:  # some data cannot fit into the model
                     CVLogL = foldLogSum/foldCount
                     curCV = CVLogL
                     #rint("average CV {}".format(curCV))
@@ -209,3 +220,5 @@ class SelectorCV(ModelSelector):
                 print("failure on {} with {} states".format(self.this_word, num_states))
             return None
         raise NotImplementedError
+
+logging.info("Finished my_model_selectors.py")

@@ -1,6 +1,9 @@
 import warnings
 from asl_data import SinglesData
 
+import logging
+logging.basicConfig(level=logging.INFO)
+logging.info("Started my_recognizer.py")
 
 def recognize(models: dict, test_set: SinglesData):
     """ Recognize test word sequences from word models set
@@ -25,7 +28,7 @@ def recognize(models: dict, test_set: SinglesData):
     # value is a list [X, Xlengths]
     test_sequences = test_set.get_all_Xlengths()
     for test_index in range(len(test_sequences)):
-        # Do not here the type of test_sequences is dict, test_index is an
+        # Do note here the type of test_sequences is dict, test_index is an
         # integer just happens to be the key value
         test_X, test_Xlengths = test_sequences[test_index]
         test_word = test_set.wordlist[test_index]
@@ -45,3 +48,5 @@ def recognize(models: dict, test_set: SinglesData):
 
     return probabilities, guesses
     raise NotImplementedError
+
+logging.info("Finished my_recognizer.py")
