@@ -290,19 +290,15 @@ def create_hmmlearn_data(dict):
         seq_len_dict[key] = np.array(sequence_cat), sequence_lengths
     return seq_len_dict
 
-def custom(asl):
+def create_features(asl):
     asl.df['grnd-ry'] = asl.df['right-y'] - asl.df['nose-y']
     asl.df['grnd-rx'] = asl.df['right-x'] - asl.df['nose-x']
     asl.df['grnd-ly'] = asl.df['left-y'] - asl.df['nose-y']
     asl.df['grnd-lx'] = asl.df['left-x'] - asl.df['nose-x']
     features_ground = ['grnd-rx', 'grnd-ry', 'grnd-lx', 'grnd-ly']
-    training = asl.build_training(features_ground)
-    print("Training words: {}".format(training.words))
-    print(training.get_word_Xlengths('CHOCOLATE'))
 
     df_means = asl.df.groupby('speaker').mean()
     asl.df['left-x-mean'] = asl.df['speaker'].map(df_means['left-x'])
-
 
     # left-x-mean exists, add the rest
     asl.df['left-y-mean'] = asl.df['speaker'].map(df_means['left-y'])
@@ -343,6 +339,7 @@ def custom(asl):
 
     asl.df[features_delta] = asl.df[features_delta].fillna(0).astype(int)
 
+def select_models(asl):
     import warnings
     from hmmlearn.hmm import GaussianHMM
 
@@ -363,7 +360,13 @@ def custom(asl):
             print("variance = ", variance[i])
             print()
 
-    my_testword = 'CHOCOLATE'
+    features_ground = ['grnd-rx', 'grnd-ry', 'grnd-lx', 'grnd-ly']
+    features_polar = ['polar-rr', 'polar-rtheta', 'polar-lr', 'polar-ltheta']
+    features_norm = ['norm-rx', 'norm-ry', 'norm-lx', 'norm-ly']
+    features_delta = ['delta-rx', 'delta-ry', 'delta-lx', 'delta-ly']
+    features_custom = ['grnd-rx', 'grnd-ry', 'grnd-lx', 'grnd-ly', 'delta-rx', 'delta-ry', 'delta-lx', 'delta-ly']
+
+    #my_testword = 'CHOCOLATE'
     #model, logL = train_a_word(my_testword, 3, features_norm)  # Experiment here with different parameters
     #print("Number of states trained in model for {} is {}".format(my_testword, model.n_components))
     #print("logL = {}".format(logL))
@@ -389,10 +392,55 @@ def custom(asl):
         else:
             print("Training failed for {}".format(word))
 
+def customRec(asl):
+    # autoreload for automatically reloading changes made in my_model_selectors and my_recognizer
+    from my_model_selectors import SelectorConstant
+    from my_model_selectors import SelectorBIC
+    from my_model_selectors import SelectorDIC
+    from my_model_selectors import SelectorCV
+
+    features_ground = ['grnd-rx', 'grnd-ry', 'grnd-lx', 'grnd-ly']
+    features_polar = ['polar-rr', 'polar-rtheta', 'polar-lr', 'polar-ltheta']
+    features_norm = ['norm-rx', 'norm-ry', 'norm-lx', 'norm-ly']
+    features_delta = ['delta-rx', 'delta-ry', 'delta-lx', 'delta-ly']
+    features_custom = ['grnd-rx', 'grnd-ry', 'grnd-lx', 'grnd-ly', 'delta-rx', 'delta-ry', 'delta-lx', 'delta-ly']
+
+    def train_all_words(features, model_selector):
+        training = asl.build_training(features)  # Experiment here with different feature sets defined in part 1
+        sequences = training.get_all_sequences()
+        Xlengths = training.get_all_Xlengths()
+        model_dict = {}
+        for word in training.words:
+            model = model_selector(sequences, Xlengths, word,
+                                   n_constant=3).select()
+            model_dict[word] = model
+        return model_dict
+
+    models = train_all_words(features_ground, SelectorConstant)
+    print("Number of word models returned = {}".format(len(models)))
+
+    from my_recognizer import recognize
+    from asl_utils import show_errors
+    import timeit
+
+    features_list = [features_ground, features_norm, features_polar, features_delta, features_custom]
+    model_selector_list = [SelectorConstant, SelectorBIC, SelectorDIC, SelectorCV]
+    for features in features_list:
+        for model_selector in model_selector_list:
+            print("\n",features, model_selector.__name__)
+            start = timeit.default_timer()
+            models = train_all_words(features, model_selector)
+            test_set = asl.build_test(features)
+            probabilities, guesses = recognize(models, test_set)
+            end = timeit.default_timer() - start
+            print("Training and test took {} seconds".format(end))
+            show_errors(guesses, test_set)
+
+    return
 
 if __name__ == '__main__':
     asl= AslDb()
-    custom(asl)
+    create_features(asl)
+    #select_models(asl)
     #print(asl.df.ix[98, 1])
-
-
+    customRec(asl)
